@@ -1,6 +1,7 @@
 ---
 import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
+import PillarDrawers from '../components/PillarDrawers.astro';
 
 const posts = (await getCollection('posts', ({ data }) => !data.draft))
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
@@ -13,6 +14,7 @@ const posts = (await getCollection('posts', ({ data }) => !data.draft))
       不荐股，只讲怎么搭一个能穿越周期的组合。估值纪律 · 分批建仓 · 仓位管理。
     </p>
   </section>
+  <PillarDrawers />
 
   <section class="list">
     {posts.map((p) => (
