@@ -1,0 +1,12 @@
+# build output
+dist/
+# astro generated types
+.astro/
+# deps
+node_modules/
+# env & secrets — 绝不提交
+.env
+.env.*
+# os / editor
+.DS_Store
+*.log

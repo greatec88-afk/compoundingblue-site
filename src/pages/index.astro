@@ -1,0 +1,26 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const posts = (await getCollection('posts', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+---
+<BaseLayout title="美股组合策略">
+  <section class="hero">
+    <p class="brandline">COMPOUNDING BLUE</p>
+    <h1>用工程师思维<br />搭建美股组合</h1>
+    <p class="lead">
+      不荐股，只讲怎么搭一个能穿越周期的组合。估值纪律 · 分批建仓 · 仓位管理。
+    </p>
+  </section>
+
+  <section class="list">
+    {posts.map((p) => (
+      <a class="card" href={`/posts/${p.slug}/`}>
+        {p.data.pillar && <p class="eyebrow">{p.data.pillar}</p>}
+        <h2>{p.data.title}</h2>
+        <p class="desc">{p.data.description}</p>
+      </a>
+    ))}
+  </section>
+</BaseLayout>

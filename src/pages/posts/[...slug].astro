@@ -1,0 +1,40 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('posts', ({ data }) => !data.draft);
+  return posts.map((post) => ({
+    params: { slug: post.slug },
+    props: { post },
+  }));
+}
+
+const { post } = Astro.props;
+const { Content } = await post.render();
+const d = post.data;
+const dateStr = d.pubDate.toLocaleDateString('zh-CN', {
+  year: 'numeric', month: 'long', day: 'numeric',
+});
+---
+<BaseLayout title={d.title} description={d.description}>
+  <article class="post">
+    {d.pillar && <p class="eyebrow">{d.pillar}</p>}
+    <h1>{d.title}</h1>
+    <p class="meta">
+      <time datetime={d.pubDate.toISOString()}>{dateStr}</time> · {d.author}
+    </p>
+
+    <div class="prose">
+      <Content />
+    </div>
+
+    <aside class="disclaimer">
+      ⚠️ 本内容仅供教育与研究交流，不构成投资建议。投资有风险，决策请自负。
+    </aside>
+    <p class="follow">
+      更多组合方法 →
+      <a href="https://instagram.com/compoundingblue" target="_blank" rel="noopener">@compoundingblue</a>
+    </p>
+  </article>
+</BaseLayout>
