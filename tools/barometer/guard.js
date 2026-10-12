@@ -3,15 +3,22 @@
  * 检查：JSON 可解析、长度上限、禁用词、免责声明、数字不出现在数据之外。
  * 不通过 → 抛错，n8n 走 Error 分支（通知你人工处理），绝不自动发布。
  *
- * 输入：$input = Claude HTTP 节点的响应；$('Barometer') = 本周天气数据
+ * 输入：$input = 文案 HTTP 节点（Claude/Gemini）的响应；$('Barometer') = 本周天气数据
  */
 const BANNED = ['买入','卖出','加仓','减仓','抄底','逃顶','止损','目标价','建议','推荐','必涨','必跌','机会来了','上车',
                 '暴跌','血洗','崩盘','起飞','暴涨','恐慌'];
 const DISCLAIMER = '非投资建议';
 
 function guard(barometer, claudeResp) {
-  const text = typeof claudeResp === 'string' ? claudeResp
-             : (claudeResp.content || []).map(c => c.text || '').join('');
+  // 兼容 Anthropic（content[].text）与 Gemini（candidates[0].content.parts[].text）两种返回格式
+  let text = claudeResp;
+  if (typeof text !== 'string') {
+    if (Array.isArray(text.content)) text = text.content.map(c => c.text || '').join('');
+    else if (text.candidates && text.candidates[0]) {
+      const parts = (text.candidates[0].content && text.candidates[0].content.parts) || [];
+      text = parts.map(p => p.text || '').join('');
+    } else text = JSON.stringify(text);
+  }
   let out;
   try { out = JSON.parse(text.trim().replace(/^```(json)?|```$/g, '')); }
   catch (e) { throw new Error('Claude 输出不是合法 JSON'); }
