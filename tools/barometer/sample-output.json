@@ -1,0 +1,66 @@
+{
+  "title": "组合晴雨表",
+  "issue": 1,
+  "week_ending": "2026-10-16",
+  "pillars": [
+    {
+      "key": "attack",
+      "name": "进攻引擎",
+      "tickers": [
+        "SMH",
+        "QQQ"
+      ],
+      "state": "storm",
+      "label": "雷暴",
+      "icon": "storm",
+      "weekly_return": -5.06,
+      "z": -2.08,
+      "vol_ratio": 2.33
+    },
+    {
+      "key": "core",
+      "name": "战略基石",
+      "tickers": [
+        "QUAL",
+        "MOAT"
+      ],
+      "state": "partly",
+      "label": "多云",
+      "icon": "partly",
+      "weekly_return": 0.65,
+      "z": 0.46,
+      "vol_ratio": 0.08
+    },
+    {
+      "key": "longevity",
+      "name": "长寿主题",
+      "tickers": [
+        "XLV",
+        "GRID"
+      ],
+      "state": "sunny",
+      "label": "晴",
+      "icon": "sunny",
+      "weekly_return": 3.76,
+      "z": 2.16,
+      "vol_ratio": 0.18
+    },
+    {
+      "key": "income",
+      "name": "收益底座",
+      "tickers": [
+        "SCHD",
+        "VYM"
+      ],
+      "state": "cloudy",
+      "label": "阴",
+      "icon": "cloudy",
+      "weekly_return": -0.7,
+      "z": -0.53,
+      "vol_ratio": 0.22,
+      "yield_spread": -0.5
+    }
+  ],
+  "summary": "1雷暴 · 1多云 · 1晴 · 1阴",
+  "rule": "z = (本周收益−历史周均值)/历史周标准差；晴>1｜多云0~1｜阴−1~0｜雨−2~−1｜雷暴≤−2 或日波动>2×常态"
+}
