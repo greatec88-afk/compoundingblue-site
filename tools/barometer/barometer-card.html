@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>组合晴雨表 · Reel 模板</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+  /* 品牌 token（与 tokens.css 同源） */
+  :root{
+    --ink:#0E1116; --surface:#141A22; --surface-2:#1A212B; --fg:#ECF1F7; --muted:#8B97A6; --line:#27303C;
+    --royal:#2457B8; --sky:#4C82F0; --amber:#E0A63A; --blue:#4C82F0; --teal:#3FB6A8; --green:#4FB477;
+    --sans:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    --mono:"Space Grotesk",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0}
+  html,body{width:1080px;height:1920px;background:var(--ink);overflow:hidden}
+  body{font-family:var(--sans);color:var(--fg);-webkit-font-smoothing:antialiased}
+  /* 安全区：顶部 150 / 底部 ~420 / 右侧 170 留给 IG 界面 */
+  .stage{position:absolute;left:72px;right:170px;top:150px}
+  .curve{position:absolute;left:0;bottom:0;width:1080px;height:640px;opacity:.10}
+
+  .brand{font:700 26px var(--mono);letter-spacing:.3em;color:var(--sky)}
+  .title{font-weight:900;font-size:112px;line-height:1.08;margin-top:22px;letter-spacing:-.01em}
+  .title small{display:block;font:700 26px var(--mono);letter-spacing:.24em;color:var(--muted);margin-top:14px}
+  .meta{display:flex;justify-content:space-between;align-items:baseline;margin-top:30px;
+        padding-bottom:22px;border-bottom:1px solid var(--line)}
+  .meta .issue{font:500 32px var(--sans);color:var(--muted)}
+  .meta .issue b{font-family:var(--mono);color:var(--fg)}
+  .meta .slogan{font:700 30px var(--sans);color:var(--sky)}
+
+  .cards{display:flex;flex-direction:column;gap:18px;margin-top:28px}
+  .card{position:relative;height:168px;background:var(--surface);border:2px solid var(--line);border-radius:22px;
+        display:grid;grid-template-columns:14px 1fr 220px 210px;align-items:center;overflow:hidden}
+  .card.storm{border-color:rgba(224,166,58,.75)} .card.rain{border-color:rgba(76,130,240,.6)}
+  .bar{height:100%}
+  .who{padding-left:30px}
+  .who .nm{font-weight:900;font-size:46px;line-height:1.1}
+  .who .tk{font:500 24px var(--mono);color:var(--muted);letter-spacing:.06em;margin-top:10px}
+  .wx{display:flex;flex-direction:column;align-items:center;gap:4px}
+  .wx svg{width:104px;height:104px}
+  .wx .lb{font-weight:700;font-size:38px}
+  .num{text-align:right;padding-right:30px}
+  .num .ret{font:700 52px var(--mono);letter-spacing:-.01em}
+  .num .z{font:500 24px var(--mono);color:var(--muted);margin-top:6px}
+  .up{color:var(--green)} .dn{color:#E8735A}
+
+  .obs{margin-top:28px;background:var(--surface-2);border-left:6px solid var(--sky);border-radius:0 18px 18px 0;padding:26px 30px}
+  .obs .k{font:700 24px var(--mono);letter-spacing:.2em;color:var(--sky)}
+  .obs .t{font-weight:700;font-size:34px;line-height:1.5;margin-top:10px;text-wrap:pretty}
+  .foot{display:flex;justify-content:space-between;margin-top:22px;font-size:24px;color:var(--muted)}
+  .foot .wm{font:700 26px var(--mono);letter-spacing:.05em}
+</style>
+</head>
+<body>
+<svg class="curve" viewBox="0 0 1080 640" preserveAspectRatio="none"><path d="M0,620 C300,590 560,500 740,330 C880,190 980,90 1080,30" fill="none" stroke="#4C82F0" stroke-width="7"/></svg>
+<div class="stage">
+  <div class="brand" id="brand">COMPOUNDING BLUE</div>
+  <div class="title" id="title">组合晴雨表<small>PORTFOLIO BAROMETER</small></div>
+  <div class="meta" id="meta"><span class="issue" id="issue"></span><span class="slogan">风雨有数，底座常青</span></div>
+  <div class="cards" id="cards"></div>
+  <div class="obs" id="obs"><div class="k">组合观察</div><div class="t" id="obsText"></div></div>
+  <div class="foot" id="foot"><span id="disc">教育分享 · 非投资建议</span><span class="wm">@compoundingblue</span></div>
+</div>
+
+<script>
+/* ============================================================
+   动画 = 时间 t（秒）的纯函数：renderAt(t)。
+   渲染器逐帧调用 renderAt(t) 并截图 → 帧时间精确、任何机器结果一致。
+   直接在浏览器打开本文件时，会以实时方式循环预览（使用内置示例数据）。
+   ============================================================ */
+const PILLAR_COLOR={attack:'#E0A63A',core:'#4C82F0',longevity:'#3FB6A8',income:'#4FB477'};
+const C={sun:'#E0A63A',cloud:'#C7D0DB',cloudDk:'#6E7B8A',drop:'#4C82F0',bolt:'#E0A63A'};
+const CLOUD='M18 46h30a10 10 0 0 0 0-20 14 14 0 0 0-27-3 10 10 0 0 0-3 23z';
+const ICON={
+  sunny:`<svg viewBox="0 0 64 64"><g class="rays" stroke="${C.sun}" stroke-width="4" stroke-linecap="round">
+    <path d="M32 6v8M32 50v8M6 32h8M50 32h8M13.6 13.6l5.7 5.7M44.7 44.7l5.7 5.7M13.6 50.4l5.7-5.7M44.7 19.3l5.7-5.7"/></g>
+    <circle cx="32" cy="32" r="12" fill="${C.sun}"/></svg>`,
+  partly:`<svg viewBox="0 0 64 64"><circle cx="24" cy="22" r="11" fill="${C.sun}"/>
+    <path d="${CLOUD}" transform="translate(6 6)" fill="${C.cloud}"/></svg>`,
+  cloudy:`<svg viewBox="0 0 64 64"><path d="${CLOUD}" transform="translate(-4 -8) scale(.85)" fill="${C.cloudDk}"/>
+    <path d="${CLOUD}" transform="translate(4 2)" fill="${C.cloud}"/></svg>`,
+  rain:`<svg viewBox="0 0 64 64"><path d="${CLOUD}" transform="translate(0 -8)" fill="${C.cloud}"/>
+    <g stroke="${C.drop}" stroke-width="4" stroke-linecap="round">
+    <path class="drop" data-d="0" d="M22 46l-3 7"/><path class="drop" data-d=".3" d="M33 46l-3 7"/><path class="drop" data-d=".6" d="M44 46l-3 7"/></g></svg>`,
+  storm:`<svg viewBox="0 0 64 64"><path d="${CLOUD}" transform="translate(0 -8)" fill="${C.cloudDk}"/>
+    <path class="bolt" d="M34 38l-9 13h8l-4 11 13-16h-8l4-8z" fill="${C.bolt}"/></svg>`,
+  na:`<svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="18" fill="none" stroke="${C.cloudDk}" stroke-width="4" stroke-dasharray="6 6"/></svg>`
+};
+
+/* 浏览器直接打开时的预览数据（示例数据，非真实行情） */
+const DEMO={issue:1,week_ending:'2026-10-16',pillars:[
+  {key:'attack',name:'进攻引擎',tickers:['SMH','QQQ'],icon:'storm',label:'雷暴',weekly_return:-5.06,z:-2.08},
+  {key:'core',name:'战略基石',tickers:['QUAL','MOAT'],icon:'partly',label:'多云',weekly_return:0.65,z:0.46},
+  {key:'longevity',name:'长寿主题',tickers:['XLV','GRID'],icon:'sunny',label:'晴',weekly_return:3.76,z:2.16},
+  {key:'income',name:'收益底座',tickers:['SCHD','VYM'],icon:'cloudy',label:'阴',weekly_return:-0.70,z:-0.53}]};
+
+/* ---------- 时间线（秒）——口播稿按此对齐 ---------- */
+const T={brand:[0,.6],title:[.3,.9],meta:[.9,1.5],card0:1.6,cardGap:1.1,obs:[6.4,7.0],foot:[7.6,8.2],
+         focusWorst:9.0,focusBest:12.5,focusEnd:16.0,ramp:.4,staticAt:8.6};
+
+const clamp=x=>Math.max(0,Math.min(1,x));
+const seg=(t,a,b)=>clamp((t-a)/(b-a));
+const eOut=k=>1-Math.pow(1-k,3);
+const eBack=k=>{const c=1.70158;return 1+(c+1)*Math.pow(k-1,3)+c*Math.pow(k-1,2);};
+const fmtRet=v=>(v>0?'+':'')+v.toFixed(2)+'%';
+const ramp=(t,on,off)=>Math.min(seg(t,on,on+T.ramp),1-seg(t,off,off+T.ramp));
+
+let R={};   // DOM 引用
+function build(){
+  const d=window.BAROMETER||DEMO;
+  const n=String(d.issue||1).padStart(2,'0');
+  const we=(d.week_ending||'').replace(/-/g,'.');
+  document.getElementById('issue').innerHTML=`第 <b>${n}</b> 期 · 截至 <b>${we}</b>`;
+  document.getElementById('obsText').textContent=window.OBS||'进攻抽屉遇雷暴，长寿抽屉却放晴——这正是把四个抽屉分开放的意义：风雨只打湿其中一格。';
+  document.getElementById('disc').textContent=window.DISC||(window.BAROMETER?'教育分享 · 非投资建议':'教育分享 · 非投资建议 · 示例数据');
+  const box=document.getElementById('cards');
+  R.cards=d.pillars.map(p=>{
+    const el=document.createElement('div');
+    el.className=`card ${p.icon}`;
+    const cls=(p.weekly_return||0)>=0?'up':'dn';
+    el.innerHTML=`<div class="bar" style="background:${PILLAR_COLOR[p.key]}"></div>
+      <div class="who"><div class="nm">${p.name}</div><div class="tk">${p.tickers.join(' · ')}</div></div>
+      <div class="wx">${ICON[p.icon]||ICON.na}<div class="lb">${p.label}</div></div>
+      <div class="num"><div class="ret ${cls}"></div>
+        <div class="z">z ${p.z==null?'—':(p.z>0?'+':'')+p.z.toFixed(2)}</div></div>`;
+    box.appendChild(el);
+    return {el,p,svg:el.querySelector('.wx svg'),ret:el.querySelector('.ret'),
+            rays:el.querySelector('.rays'),bolt:el.querySelector('.bolt'),drops:[...el.querySelectorAll('.drop')]};
+  });
+  ['brand','title','meta','obs','foot'].forEach(id=>R[id]=document.getElementById(id));
+  const zs=d.pillars.map((p,i)=>({i,z:p.z==null?0:p.z}));
+  R.worst=zs.reduce((a,b)=>b.z<a.z?b:a).i;
+  R.best=zs.reduce((a,b)=>b.z>a.z?b:a).i;
+}
+
+function fade(el,t,[a,b]){const k=eOut(seg(t,a,b));el.style.opacity=k;el.style.transform=`translateY(${(1-k)*24}px)`;}
+
+window.renderAt=function(t,noFocus){
+  fade(R.brand,t,T.brand); fade(R.title,t,T.title); fade(R.meta,t,T.meta);
+  fade(R.obs,t,T.obs); fade(R.foot,t,T.foot);
+  const any=noFocus?0:ramp(t,T.focusWorst,T.focusEnd);
+  R.cards.forEach((c,i)=>{
+    const ta=T.card0+i*T.cardGap;
+    const ap=eOut(seg(t,ta,ta+.6));
+    let fw=0;
+    if(!noFocus){
+      if(i===R.worst) fw=Math.max(fw,ramp(t,T.focusWorst,T.focusBest));
+      if(i===R.best)  fw=Math.max(fw,ramp(t,T.focusBest,T.focusEnd));
+    }
+    const dim=1-.62*any*(1-fw);
+    c.el.style.opacity=ap*dim;
+    c.el.style.transform=`translateX(${(1-ap)*80}px) scale(${1+.03*fw})`;
+    const col=PILLAR_COLOR[c.p.key];
+    c.el.style.boxShadow=fw>0?`0 0 0 ${4*fw}px ${col}, 0 18px 50px rgba(0,0,0,${.45*fw})`:'none';
+    c.el.style.zIndex=fw>0?2:1;
+    // 图标弹出
+    const s=seg(t,ta+.25,ta+.75);
+    c.svg.style.opacity=Math.min(1,s*3);
+    c.svg.style.transform=`scale(${.4+.6*eBack(s)})`;
+    // 数字滚动
+    const v=c.p.weekly_return;
+    c.ret.textContent=v==null?'—':fmtRet(v*eOut(seg(t,ta+.25,ta+1.05)));
+    // 环境动效
+    if(c.rays){c.rays.style.transformOrigin='32px 32px';c.rays.style.transform=`rotate(${t*20}deg)`;}
+    if(c.bolt){const ph=(t%2.4)/2.4;c.bolt.style.opacity=(ph>.86&&ph<.88)?.25:(ph>.92&&ph<.94)?.4:1;}
+    c.drops.forEach(dr=>{const pr=((t+parseFloat(dr.dataset.d))%1.2)/1.2;
+      dr.style.transform=`translateY(${-4+12*pr}px)`;dr.style.opacity=pr<.4?pr/.4:1-(pr-.4)/.6;});
+  });
+};
+
+build();
+if(window.STATIC){ renderAt(T.staticAt,true); }
+else if(window.RENDERER){ renderAt(0); }
+else {                                           // 直接打开 = 实时循环预览
+  const t0=performance.now();
+  (function loop(now){ renderAt(((now-t0)/1000)%20); requestAnimationFrame(loop); })(t0);
+}
+</script>
+</body>
+</html>
