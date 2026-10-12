@@ -3,7 +3,7 @@
  * 检查：JSON 可解析、长度上限、禁用词、免责声明、数字不出现在数据之外。
  * 不通过 → 抛错，n8n 走 Error 分支（通知你人工处理），绝不自动发布。
  *
- * 输入：$input.first().json = { barometer: {...}, claude: <Anthropic 响应> }
+ * 输入：$input = Claude HTTP 节点的响应；$('Barometer') = 本周天气数据
  */
 const BANNED = ['买入','卖出','加仓','减仓','抄底','逃顶','止损','目标价','建议','推荐','必涨','必跌','机会来了','上车',
                 '暴跌','血洗','崩盘','起飞','暴涨','恐慌'];
@@ -42,7 +42,8 @@ function guard(barometer, claudeResp) {
 }
 
 if (typeof $input !== 'undefined') {
-  const j = $input.first().json;
-  return [{ json: { ...guard(j.barometer, j.claude), barometer: j.barometer } }];
+  // 输入 = Claude HTTP 节点的响应；本周数据从「Barometer」节点取（改了节点名就同步改这里）
+  const barometer = $('Barometer').first().json;
+  return [{ json: { ...guard(barometer, $input.first().json), barometer } }];
 }
 if (typeof module !== 'undefined') module.exports = { guard };

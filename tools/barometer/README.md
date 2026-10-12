@@ -8,6 +8,9 @@
 | 文件 | 作用 |
 |---|---|
 | `barometer.js` | 天气判定脚本。输入四个篮子的日收盘价 → 输出四个天气。可直接粘贴进 n8n Code 节点 |
+| `tickers.js` | n8n Code 节点「Tickers」：四个篮子的 8 个 ETF（示例代理，改这里） |
+| `assemble.js` | n8n Code 节点「Assemble」：Tiingo 日线 + FRED 10Y → barometer.js 的输入（复权、按日期对齐、股息率、过期检查） |
+| `test-assemble.js` | 用 Tiingo 格式的模拟响应测试组装 → 判定：`node test-assemble.js` |
 | `test.js` | 用模拟数据测试判定逻辑 + 阈值边界单测：`node test.js` |
 | `barometer-card.html` | 1080×1920 看板模板（品牌色、自绘天气 SVG、动效）。浏览器直接打开 = 用示例数据实时预览 |
 | `render.py` | 渲染器：JSON → PNG（封面/单图）+ MP4（20 秒、30fps，逐帧确定性渲染） |
@@ -30,37 +33,52 @@ z = (本周收益 − 过去 52 周的周收益均值) / 周收益标准差     
 - 每个标的至少需要约 2 个月日线，否则显示「数据不足」。建议传 **≥ 266 个交易日**（52 周 + 本周）。
 - 收益底座可额外传 `dividend_yield` 和 `treasury_10y`（%），输出 `yield_spread`（百分点）。
 
-## n8n 流程（每周五美东收盘后）
+## 数据源
 
-```
-Cron（周五 17:30 ET）
- → HTTP Request × 8：拉 8 个 ETF 的日收盘价（任一行情 API，按你选的服务调整）
- → Code「组装」：拼成 barometer.js 需要的输入 JSON（格式见 barometer.js 顶部注释）
- → Code「barometer.js」：输出四个天气
- → HTTP Request「Claude」：claude-prompt.md
- → Code「guard.js」：不通过 → Error 分支发邮件给你
- → HTTP Request「GitHub repository_dispatch」：触发渲染
- → （人工）下载 Actions 产物 → 剪映配音 → 发布
-```
+- **ETF 日线：Tiingo 免费版**（每小时 50 次 / 每天 1,000 次 / 每月 500 个代码）。每周只用 8 次请求。
+  取 `adjClose`（复权价）算收益，`divCash` + `close` 算收益底座股息率。
+- **10 年期国债：FRED `DGS10`**（免费注册 API key）。
+- ⚠️ Tiingo 免费版条款为「个人内部使用、不得向他人展示数据」。**发布真实数据前**先向 Tiingo 书面确认可以展示由其日线计算的周收益，或改用允许展示的方案。
 
-**触发渲染的请求**
+## n8n 流程（每周六 09:00 北京时间）
+
+工作流 **Settings → Timezone 设为 Asia/Shanghai**；**Settings → Error Workflow** 指向一个「Error Trigger → 发邮件给自己」的小工作流。
+
+| # | 节点（名字要一致） | 类型 | 配置 |
+|---|---|---|---|
+| 1 | Schedule | Schedule Trigger | Cron：`0 9 * * 6`（美东周五 20:00/21:00 之后，Tiingo 收盘修正已结束） |
+| 2 | FRED DGS10 | HTTP Request | GET `https://api.stlouisfed.org/fred/series/observations`；Query：`series_id=DGS10`、`file_type=json`、`sort_order=desc`、`limit=10`；认证：Generic → Query Auth（name `api_key`） |
+| 3 | Tickers | Code | 粘贴 `tickers.js` |
+| 4 | Tiingo | HTTP Request | GET `https://api.tiingo.com/tiingo/daily/{{ $json.ticker }}/prices`；Query：`startDate={{ $json.startDate }}`；认证：Generic → Header Auth（Name `Authorization`，Value `Token 你的key`）；**Options → Response → Response Format: Text，Put Output in Field: `data`**（保证每个 ETF 一个 item）；Options → Batching：每批 1 个、间隔 1500 ms |
+| 5 | Assemble | Code | 粘贴 `assemble.js`（第 01 期日期在顶部 `FIRST_WEEK_ENDING`） |
+| 6 | Barometer | Code | 粘贴 `barometer.js` |
+| 7 | Claude | HTTP Request | 见 `claude-prompt.md` |
+| 8 | Guard | Code | 粘贴 `guard.js` |
+| 9 | Dispatch | HTTP Request | 触发 GitHub Actions 渲染（见下） |
+
+**会自动停下并通知你的情况**（Assemble / Guard 抛错 → Error Workflow）：Tiingo 返回错误或空数据；8 个 ETF 的共同交易日少于 266 天；最新数据距运行时刻超过 4 天；文案未通过守门。
+节假日短周（如 Good Friday）不会停：仍按「最近 5 个交易日」计算，`data_check.short_week = true`，可在文案里注明。
+
+**第一次接通时**：先只跑到第 6 步，看 Assemble 输出的 `data_check`（`common_days` 应 ≈ 290，`dropped_days` 应很少）和 Barometer 的四个天气是否合理，再接后面三步。
+
+**触发渲染的请求（第 9 步）**
 
 ```
 POST https://api.github.com/repos/<你的账号>/<仓库>/dispatches
-Authorization: Bearer {{$env.GITHUB_TOKEN}}       ← fine-grained token，只给这个仓库 Contents: read & write
+Authorization: Bearer <GitHub token，放 n8n 凭据>      ← fine-grained token，只给这个仓库 Contents: read & write
 Accept: application/vnd.github+json
 
 { "event_type": "barometer",
-  "client_payload": { "barometer": <barometer.js 输出>, "observation": "<guard 通过后的 observation>" } }
+  "client_payload": { "barometer": {{ JSON.stringify($json.barometer) }}, "observation": {{ JSON.stringify($json.observation) }} } }
 ```
 
-GitHub 对 `client_payload` 的顶层键数量有上限（10 个），上面只用了 2 个，够用。
+GitHub 对 `client_payload` 的顶层键数量有上限（10 个），这里只用 2 个。
 
 ## 部署到仓库
 
 1. 把整个文件夹放进网站仓库的 `tools/barometer/`，把 `.github/workflows/barometer-reel.yml` 放到仓库根目录的 `.github/workflows/`。
 2. 在 GitHub → Actions → barometer-reel → **Run workflow**，用示例数据跑一次，下载产物确认。
-3. 在 n8n 建 GitHub token 凭据（环境变量），密钥不进仓库。
+3. 在 n8n 的 Credentials 里建 Tiingo、FRED、Anthropic、GitHub 四个凭据——密钥全部只放 n8n，不进仓库、不写进 Code 节点。
 
 ## 本地渲染（Mac mini 也可以）
 
