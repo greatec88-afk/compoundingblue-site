@@ -52,7 +52,7 @@ z = (本周收益 − 过去 52 周的周收益均值) / 周收益标准差     
 | 4 | Tiingo | HTTP Request | GET `https://api.tiingo.com/tiingo/daily/{{ $json.ticker }}/prices`；Query：`startDate={{ $json.startDate }}`；认证：Generic → Header Auth（Name `Authorization`，Value `Token 你的key`）；**Options → Response → Response Format: Text，Put Output in Field: `data`**（保证每个 ETF 一个 item）；Options → Batching：每批 1 个、间隔 1500 ms |
 | 5 | Assemble | Code | 粘贴 `assemble.js`（第 01 期日期在顶部 `FIRST_WEEK_ENDING`） |
 | 6 | Barometer | Code | 粘贴 `barometer.js` |
-| 7 | Claude | HTTP Request | 见 `claude-prompt.md` |
+| 7 | Gemini | HTTP Request | 见 `gemini-prompt.md`（模型 gemini-2.5-flash，免费额度；`claude-prompt.md` 保留备用） |
 | 8 | Guard | Code | 粘贴 `guard.js` |
 | 9 | Dispatch | HTTP Request | 触发 GitHub Actions 渲染（见下） |
 
@@ -78,7 +78,7 @@ GitHub 对 `client_payload` 的顶层键数量有上限（10 个），这里只�
 
 1. 把整个文件夹放进网站仓库的 `tools/barometer/`，把 `.github/workflows/barometer-reel.yml` 放到仓库根目录的 `.github/workflows/`。
 2. 在 GitHub → Actions → barometer-reel → **Run workflow**，用示例数据跑一次，下载产物确认。
-3. 在 n8n 的 Credentials 里建 Tiingo、FRED、Anthropic、GitHub 四个凭据——密钥全部只放 n8n，不进仓库、不写进 Code 节点。
+3. 在 n8n 的 Credentials 里建 Tiingo、FRED、Gemini、GitHub 四个凭据——密钥全部只放 n8n，不进仓库、不写进 Code 节点。
 
 ## 本地渲染（Mac mini 也可以）
 
@@ -106,6 +106,6 @@ python3 render.py --data sample-output.json \
 ## 红线
 
 - 只用数据说话：文案中的百分比必须出自本周 JSON（guard.js 自动核对）。
-- 不预测、不建议、不点名个股；禁用词清单在 claude-prompt.md 和 guard.js 里，两边同步改。
+- 不预测、不建议、不点名个股；禁用词清单在 gemini-prompt.md（/ claude-prompt.md）和 guard.js 里，几边同步改。
 - 示例数据必须标「示例数据」；正式期数用真实行情后去掉。
 - 不公开个人持仓：篮子是公开 ETF 代理，不是你的仓位。
