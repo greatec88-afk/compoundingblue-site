@@ -39,14 +39,21 @@ jobs:
               json.dump(p["barometer"], open("data.json", "w", encoding="utf-8"), ensure_ascii=False)
               open("obs.txt", "w", encoding="utf-8").write(p.get("observation", ""))
               open("disc.txt", "w", encoding="utf-8").write("教育分享 · 非投资建议")
+              open("audio_url.txt", "w").write(p.get("audio_url", ""))   # 可选：配音文件的下载地址
           else:   # 手动测试：示例数据
               import shutil; shutil.copy("sample-output.json", "data.json")
-              open("obs.txt", "w", encoding="utf-8").write("进攻抽屉遇雷暴，长寿抽屉却放晴——这正是把四个抽屉分开放的意义：风雨只打湿其中一格。")
+              open("obs.txt", "w", encoding="utf-8").write("实际利率升、通胀预期降，叠加成十年期 +10bp——收益底座的天气，是另外两格的合力。")
               open("disc.txt", "w", encoding="utf-8").write("教育分享 · 非投资建议 · 示例数据")
           PY
 
       - name: Render
-        run: python render.py --data data.json --obs "$(cat obs.txt)" --disc "$(cat disc.txt)" --out out
+        run: |
+          ARGS=()
+          if [ -s audio_url.txt ]; then
+            curl -fsSL "$(cat audio_url.txt)" -o voice.audio
+            ARGS=(--audio voice.audio)      # 画面跟着配音走，音频合进 MP4
+          fi
+          python render.py --data data.json --obs "$(cat obs.txt)" --disc "$(cat disc.txt)" --out out "${ARGS[@]}"
 
       - uses: actions/upload-artifact@v4
         with:

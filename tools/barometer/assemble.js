@@ -1,102 +1,146 @@
 /**
- * 组合晴雨表 · n8n Code 节点「Assemble」（Run Once for All Items）
+ * 组合晴雨表 · n8n Code 节点「Assemble」（Run Once for All Items）v2
  * ------------------------------------------------------------
- * 把 8 个 Tiingo 日线响应 + FRED DGS10 组装成 barometer.js 的输入 JSON。
+ * 把 3 个 FRED 响应（DFII10 / DGS10 / IC4WSA）组装成 barometer.js 的输入。
  *
- *   1. 用 adjClose（复权价）——避免 SCHD/VYM 除息日出现约 1% 的假下跌
- *   2. 按日期取 8 个标的的交集再对齐——任一标的缺一天也不会错位
- *   3. 收益底座股息率 = 最近 4 次 divCash 之和 ÷ 最新原始收盘价（两只等权平均）
- *   4. 10 年期国债 = 最新交易日当天或之前最近一个有效 DGS10
- *   5. 过期 / 历史不足 → 直接抛错，n8n 走 Error 分支通知你，不渲染不发布
+ *   1. 截至日 = 最近一个「已过去 3 天以上」的周五（H.15 日度利率次一工作日才发布，
+ *      周二 09:00 北京时间运行时，上周五的数据一定已经发布）
+ *   2. 通胀预期 = DGS10 − DFII10，按同一天配对自己算（不用 FRED 自算的 T10YIE，那是版权序列）
+ *   3. 过期 / 历史不足 → 直接抛错，n8n 走 Error Workflow 通知你，不渲染不发布
  *
- * 上游节点名（改名的话同步改这里）：
+ * 数据均为美国政府公共领域数据：美联储 H.15、美国劳工部。
  */
-const NODE_TICKERS = 'Tickers';
-const NODE_FRED    = 'FRED DGS10';
-const FIRST_WEEK_ENDING = '2026-10-16';   // 第 01 期的截至日；之后每周 +1
-const MIN_COMMON_DAYS   = 266;            // 52 周 × 5 + 本周 5 + 1
-const MAX_STALE_DAYS    = 4;              // 最新 K 线距运行时刻超过 4 天 = 数据没更新
-const DIVS_PER_YEAR     = 4;              // SCHD / VYM 均为季度分红
+const NODE_SERIES = 'Series';                 // 上游节点名，改名的话同步改这里
+const NODE_CALENDAR = 'FRED Calendar';        // 可选：未来 7 天的数据发布日历
+const FIRST_WEEK_ENDING = '2026-10-16';       // 第 01 期的截至日；之后每周 +1
+const MIN_DAILY_OBS  = 250;
+const MIN_WEEKLY_OBS = 40;
+const MAX_CLAIMS_LAG_DAYS = 13;               // 初请数据比利率晚约一周发布
 
-function assemble({ tiingo, tickers, fred, now = new Date() }) {
-  // ---- 1. 每个标的：date → {adj, close, div} ----
-  const series = {};
-  tiingo.forEach((bars, i) => {
-    const t = tickers[i];
-    if (bars && bars.detail) throw new Error(`Tiingo 错误（${t.ticker}）：${bars.detail}`);
-    if (!Array.isArray(bars) || !bars.length) throw new Error(`Tiingo 返回空数据：${t.ticker}`);
-    const m = new Map();
-    bars.forEach(b => m.set(String(b.date).slice(0, 10),
-      { adj: +b.adjClose, close: +b.close, div: +(b.divCash || 0) }));
-    series[t.ticker] = { meta: t, map: m };
+const PILLARS = {
+  attack:    { name: '进攻引擎', factor: '实际利率',     kind: 'rate',   freq: 'daily',  direction: 'up_bad', from: 'DFII10' },
+  core:      { name: '战略基石', factor: '初请4周均值',  kind: 'claims', freq: 'weekly', direction: 'up_bad', from: 'IC4WSA' },
+  longevity: { name: '长寿主题', factor: '通胀预期',     kind: 'rate',   freq: 'daily',  direction: 'up_bad', from: 'DGS10-DFII10' },
+  income:    { name: '收益底座', factor: '10年期国债',   kind: 'rate',   freq: 'daily',  direction: 'up_bad', from: 'DGS10' },
+};
+
+/* ---------- 本周看点：未来 7 天会影响各抽屉的重要发布 ---------- */
+// 美联储议息「决议日」（会议第二天）。来源：federalreserve.gov FOMC 日历；2027 年为暂定，每年核对一次。
+const FOMC_DECISIONS = ['2026-01-28','2026-03-18','2026-04-29','2026-06-17','2026-07-29','2026-09-16','2026-10-28','2026-12-09',
+                        '2027-01-27','2027-03-17','2027-04-28','2027-06-09','2027-07-28','2027-09-15','2027-10-27','2027-12-08'];
+// FRED 发布名称 → 中文事件、影响的抽屉、优先级（数字越小越重要）
+const EVENTS = [
+  { match: /^Consumer Price Index\b/i,       name: 'CPI 通胀数据', short: 'CPI',  drawers: ['长寿主题', '收益底座'], pri: 1 },
+  { match: /^Employment Situation\b/i,       name: '非农就业报告', short: '非农', drawers: ['战略基石', '进攻引擎'], pri: 1 },
+  { match: /^Personal Income and Outlays\b/i, name: 'PCE 通胀数据', short: 'PCE',  drawers: ['长寿主题', '收益底座'], pri: 2 },
+  { match: /^Gross Domestic Product\b/i,     name: 'GDP 数据',     short: 'GDP',  drawers: ['战略基石'],             pri: 2 },
+];
+const WEEKDAY = '日一二三四五六';
+
+function buildCalendar(fredCal, now) {
+  const start = iso(now), end = addDays(start, 6);
+  const seen = new Set(), out = [];
+  const push = (date, e) => {
+    const k = e.short + date;
+    if (date < start || date > end || seen.has(k)) return;
+    seen.add(k);
+    out.push({ date, weekday: '周' + WEEKDAY[new Date(date + 'T00:00:00Z').getUTCDay()],
+               event: e.name, short: e.short, drawers: e.drawers, pri: e.pri });
+  };
+  ((fredCal && fredCal.release_dates) || []).forEach(r => {
+    const e = EVENTS.find(x => x.match.test(String(r.release_name || '').trim()));
+    if (e) push(r.date, e);
   });
+  FOMC_DECISIONS.forEach(d => push(d, { name: '美联储议息结果', short: '议息', drawers: ['进攻引擎', '收益底座'], pri: 0 }));
+  let top = out.sort((a, b) => a.pri - b.pri || (a.date < b.date ? -1 : 1)).slice(0, 2);
+  if (top.length < 2) {                         // 没有大事件时，用每周四的初请周报兜底
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(start, i);
+      if (new Date(d + 'T00:00:00Z').getUTCDay() === 4) {
+        top.push({ date: d, weekday: '周四', event: '初请失业金周报', short: '初请', drawers: ['战略基石'], pri: 3 });
+        break;
+      }
+    }
+  }
+  return top.sort((a, b) => a.date < b.date ? -1 : 1);
+}
 
-  // ---- 2. 日期交集 ----
-  const all = Object.values(series);
-  let common = [...all[0].map.keys()];
-  all.slice(1).forEach(s => { common = common.filter(d => s.map.has(d)); });
-  common.sort();
-  const missing = all.map(s => ({ t: s.meta.ticker, n: s.map.size - common.length })).filter(x => x.n > 0);
-  if (common.length < MIN_COMMON_DAYS)
-    throw new Error(`共同交易日只有 ${common.length} 天，少于 ${MIN_COMMON_DAYS}`);
+const iso = d => d.toISOString().slice(0, 10);
+const addDays = (ds, n) => iso(new Date(+new Date(ds + 'T00:00:00Z') + n * 864e5));
 
-  // ---- 3. 过期检查 ----
-  const last = common[common.length - 1];
-  const ageDays = (now - new Date(last + 'T21:00:00Z')) / 864e5;
-  if (ageDays > MAX_STALE_DAYS)
-    throw new Error(`最新共同交易日是 ${last}，距今 ${ageDays.toFixed(1)} 天——数据可能没更新`);
+function targetFriday(now) {
+  // 周五 21:00 UTC ≈ 美东收盘后；再过 3 天确保 H.15 已发布周五数据
+  let d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  for (let i = 0; i < 14; i++, d = new Date(+d - 864e5)) {
+    if (d.getUTCDay() === 5 && +d + (21 + 72) * 3600e3 <= +now) return iso(d);
+  }
+  throw new Error('无法确定截至日');
+}
 
-  // 本周（周一到最新日）交易日数，短周（节假日）只做标记
-  const lastD = new Date(last + 'T00:00:00Z');
-  const monday = new Date(lastD - ((lastD.getUTCDay() + 6) % 7) * 864e5).toISOString().slice(0, 10);
-  const daysThisWeek = common.filter(d => d >= monday).length;
+function parseFred(resp, id) {
+  if (resp && resp.error_message) throw new Error(`FRED 错误（${id}）：${resp.error_message}`);
+  const obs = (resp && resp.observations) || [];
+  const out = obs.filter(o => o.value !== '.' && o.value !== '' && !isNaN(+o.value))
+                 .map(o => [o.date, +o.value]).sort((a, b) => a[0] < b[0] ? -1 : 1);
+  if (!out.length) throw new Error(`FRED 返回空数据：${id}`);
+  return out;
+}
 
-  // ---- 4. 组装 pillars ----
-  const pillars = {};
-  all.forEach(({ meta, map }) => {
-    const p = pillars[meta.pillar] ||= { name: meta.pillar_name, tickers: {} };
-    p.tickers[meta.ticker] = common.map(d => +map.get(d).adj.toFixed(4));
-  });
+function assemble({ fred, calendar = null, now = new Date() }) {
+  const we = targetFriday(now);
+  const monday = addDays(we, -4);
+  const s = {};
+  ['DFII10', 'DGS10', 'IC4WSA'].forEach(id => { s[id] = parseFred(fred[id], id).filter(o => o[0] <= we); });
 
-  // 收益底座：近 4 次分红 / 最新原始收盘价
-  if (pillars.income) {
-    const ys = Object.keys(pillars.income.tickers).map(tk => {
-      const { map } = series[tk];
-      const dates = [...map.keys()].sort();
-      const divs = dates.filter(d => map.get(d).div > 0).slice(-DIVS_PER_YEAR).map(d => map.get(d).div);
-      const px = map.get(last).close;
-      return divs.length === DIVS_PER_YEAR && px > 0 ? divs.reduce((a, b) => a + b, 0) / px * 100 : null;
-    }).filter(y => y !== null);
-    if (ys.length) pillars.income.dividend_yield = +(ys.reduce((a, b) => a + b, 0) / ys.length).toFixed(2);
+  // 通胀预期：同日配对
+  const real = new Map(s.DFII10);
+  s['DGS10-DFII10'] = s.DGS10.filter(([d]) => real.has(d)).map(([d, v]) => [d, +(v - real.get(d)).toFixed(4)]);
 
-    const obs = (fred && fred.observations) || [];
-    const t10 = obs.filter(o => o.value !== '.' && o.date <= last).sort((a, b) => a.date < b.date ? 1 : -1)[0];
-    if (t10) { pillars.income.treasury_10y = +(+t10.value).toFixed(2); pillars.income.treasury_date = t10.date; }
+  const check = {};
+  for (const [id, obs] of Object.entries(s)) {
+    const last = obs[obs.length - 1][0];
+    const weekly = id === 'IC4WSA';
+    check[id] = { last, n: obs.length };
+    if (obs.length < (weekly ? MIN_WEEKLY_OBS : MIN_DAILY_OBS))
+      throw new Error(`${id} 只有 ${obs.length} 个观测，历史不足`);
+    if (!weekly && last < monday)
+      throw new Error(`${id} 最新数据 ${last} 不在截至周（${monday}~${we}）内——H.15 可能未更新`);
+    if (weekly && last < addDays(we, -MAX_CLAIMS_LAG_DAYS))
+      throw new Error(`IC4WSA 最新数据 ${last} 距截至日超过 ${MAX_CLAIMS_LAG_DAYS} 天`);
   }
 
-  const issue = Math.round((new Date(last) - new Date(FIRST_WEEK_ENDING)) / (7 * 864e5)) + 1;
+  const pillars = {};
+  for (const [k, p] of Object.entries(PILLARS)) {
+    const { from, ...meta } = p;
+    pillars[k] = { ...meta, series: from, obs: s[from] };
+  }
+  const daysThisWeek = s.DGS10.filter(o => o[0] >= monday).length;
+  const issue = Math.round((new Date(we) - new Date(FIRST_WEEK_ENDING)) / (7 * 864e5)) + 1;
+
   return {
-    week_ending: last,
+    week_ending: we,
     issue: Math.max(1, issue),
     lookback_weeks: 52,
     pillars,
-    data_check: { common_days: common.length, first_day: common[0], days_this_week: daysThisWeek,
-                  short_week: daysThisWeek < 5, dropped_days: missing, source: 'Tiingo EOD adjClose · FRED DGS10' },
+    calendar: buildCalendar(calendar, now),
+    data_check: { ...check, days_this_week: daysThisWeek, short_week: daysThisWeek < 5,
+                  source: '美联储 H.15（DFII10, DGS10）· 美国劳工部（IC4WSA）· 经 FRED® API' },
   };
 }
 
 /* ---------- n8n 入口 ---------- */
 if (typeof $input !== 'undefined') {
-  const tickers = $(NODE_TICKERS).all().map(i => i.json);
+  const ids = $(NODE_SERIES).all().map(i => i.json.series_id);
   const raw = $input.all();
-  // HTTP 节点设成「Response Format: Text，Put Output in Field: data」→ 每个标的正好一个 item，顺序与 Tickers 一致
-  if (raw.length !== tickers.length)
-    throw new Error(`收到 ${raw.length} 个 Tiingo 响应，应为 ${tickers.length} 个——检查 HTTP 节点的响应格式设置`);
-  const tiingo = raw.map(it => {
-    const d = it.json.data;
-    if (typeof d === 'string') { try { return JSON.parse(d); } catch (e) { return { detail: d.slice(0, 120) }; } }
-    return d;
+  if (raw.length !== ids.length) throw new Error(`收到 ${raw.length} 个 FRED 响应，应为 ${ids.length} 个`);
+  const fred = {};
+  raw.forEach((it, i) => {
+    let j = it.json;
+    if (typeof j.data === 'string') { try { j = JSON.parse(j.data); } catch (e) { j = { error_message: j.data.slice(0, 120) }; } }
+    fred[ids[i]] = j;
   });
-  return [{ json: assemble({ tiingo, tickers, fred: $(NODE_FRED).first().json }) }];
+  let calendar = null;
+  try { calendar = $(NODE_CALENDAR).first().json; } catch (e) { /* 没接日历节点也能跑：只用议息日 + 初请兜底 */ }
+  return [{ json: assemble({ fred, calendar }) }];
 }
-if (typeof module !== 'undefined') module.exports = { assemble };
+if (typeof module !== 'undefined') module.exports = { assemble, targetFriday, buildCalendar };

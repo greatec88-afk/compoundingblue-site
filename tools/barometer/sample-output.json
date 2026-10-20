@@ -6,61 +6,166 @@
     {
       "key": "attack",
       "name": "进攻引擎",
-      "tickers": [
-        "SMH",
-        "QQQ"
-      ],
-      "state": "storm",
-      "label": "雷暴",
-      "icon": "storm",
-      "weekly_return": -5.06,
-      "z": -2.08,
-      "vol_ratio": 2.33
+      "factor": "实际利率",
+      "kind": "rate",
+      "state": "rain",
+      "label": "雨",
+      "icon": "rain",
+      "latest": 2.19,
+      "change": 0.18,
+      "latest_display": "2.19%",
+      "change_value": 18,
+      "change_unit": "bp",
+      "change_decimals": 0,
+      "change_display": "+18bp",
+      "as_of": "2026-10-16",
+      "z": 1.55,
+      "score": -1.55,
+      "headwind": true,
+      "intensity": "明显",
+      "direction": "上行",
+      "vol_ratio": 0.22
     },
     {
       "key": "core",
       "name": "战略基石",
-      "tickers": [
-        "QUAL",
-        "MOAT"
-      ],
+      "factor": "初请4周均值",
+      "kind": "claims",
       "state": "partly",
       "label": "多云",
       "icon": "partly",
-      "weekly_return": 0.65,
-      "z": 0.46,
-      "vol_ratio": 0.08
+      "latest": 223945,
+      "change": -2000,
+      "latest_display": "22.4万人",
+      "change_value": -0.2,
+      "change_unit": "万",
+      "change_decimals": 1,
+      "change_display": "-0.2万人",
+      "as_of": "2026-10-10",
+      "z": -0.44,
+      "score": 0.44,
+      "headwind": false,
+      "intensity": "常态",
+      "direction": "下行",
+      "vol_ratio": 0
     },
     {
       "key": "longevity",
       "name": "长寿主题",
-      "tickers": [
-        "XLV",
-        "GRID"
-      ],
+      "factor": "通胀预期",
+      "kind": "rate",
       "state": "sunny",
       "label": "晴",
       "icon": "sunny",
-      "weekly_return": 3.76,
-      "z": 2.16,
-      "vol_ratio": 0.18
+      "latest": 2.24,
+      "change": -0.08,
+      "latest_display": "2.24%",
+      "change_value": -8,
+      "change_unit": "bp",
+      "change_decimals": 0,
+      "change_display": "-8bp",
+      "as_of": "2026-10-16",
+      "z": -1.74,
+      "score": 1.74,
+      "headwind": false,
+      "intensity": "明显",
+      "direction": "下行",
+      "vol_ratio": 0.47
     },
     {
       "key": "income",
       "name": "收益底座",
-      "tickers": [
-        "SCHD",
-        "VYM"
-      ],
+      "factor": "10年期国债",
+      "kind": "rate",
       "state": "cloudy",
       "label": "阴",
       "icon": "cloudy",
-      "weekly_return": -0.7,
-      "z": -0.53,
-      "vol_ratio": 0.22,
-      "yield_spread": -0.5
+      "latest": 4.43,
+      "change": 0.1,
+      "latest_display": "4.43%",
+      "change_value": 10,
+      "change_unit": "bp",
+      "change_decimals": 0,
+      "change_display": "+10bp",
+      "as_of": "2026-10-16",
+      "z": 0.8,
+      "score": -0.8,
+      "headwind": true,
+      "intensity": "常态",
+      "direction": "上行",
+      "vol_ratio": 0.12
     }
   ],
-  "summary": "1雷暴 · 1多云 · 1晴 · 1阴",
-  "rule": "z = (本周收益−历史周均值)/历史周标准差；晴>1｜多云0~1｜阴−1~0｜雨−2~−1｜雷暴≤−2 或日波动>2×常态"
+  "summary": "1雨 · 1多云 · 1晴 · 1阴",
+  "identity": "10年期国债 = 实际利率 + 通胀预期",
+  "story": {
+    "hook": {
+      "name": "长寿主题",
+      "factor": "通胀预期",
+      "change_display": "-8bp",
+      "latest_display": "2.24%",
+      "label": "晴",
+      "intensity": "明显",
+      "direction": "下行"
+    },
+    "most_headwind": {
+      "name": "进攻引擎",
+      "factor": "实际利率",
+      "change_display": "+18bp",
+      "latest_display": "2.19%",
+      "label": "雨",
+      "intensity": "明显",
+      "direction": "上行"
+    },
+    "most_tailwind": {
+      "name": "长寿主题",
+      "factor": "通胀预期",
+      "change_display": "-8bp",
+      "latest_display": "2.24%",
+      "label": "晴",
+      "intensity": "明显",
+      "direction": "下行"
+    },
+    "headwinds": [
+      "进攻引擎",
+      "收益底座"
+    ],
+    "tailwinds": [
+      "战略基石",
+      "长寿主题"
+    ],
+    "decomposition": {
+      "ten_year_bp": 10,
+      "real_bp": 18,
+      "inflation_bp": -8,
+      "driver": "实际利率",
+      "offsetting": true,
+      "sentence": "十年期 +10bp = 实际利率 +18bp + 通胀预期 -8bp"
+    }
+  },
+  "watch": [
+    {
+      "date": "2026-10-22",
+      "weekday": "周四",
+      "event": "CPI 通胀数据",
+      "short": "CPI",
+      "drawers": [
+        "长寿主题",
+        "收益底座"
+      ],
+      "pri": 1
+    },
+    {
+      "date": "2026-10-22",
+      "weekday": "周四",
+      "event": "初请失业金周报",
+      "short": "初请",
+      "drawers": [
+        "战略基石"
+      ],
+      "pri": 3
+    }
+  ],
+  "source": "美联储 H.15 · 美国劳工部（经 FRED®）",
+  "rule": "本周变化的 z 值，上升=逆风；晴>1｜多云0~1｜阴−1~0｜雨−2~−1｜雷暴≤−2 或日波动>2×常态"
 }
