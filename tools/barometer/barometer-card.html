@@ -28,38 +28,59 @@
   .meta .issue b{font-family:var(--mono);color:var(--fg)}
   .meta .slogan{font:700 30px var(--sans);color:var(--sky)}
 
-  .cards{display:flex;flex-direction:column;gap:18px;margin-top:28px}
-  .card{position:relative;height:168px;background:var(--surface);border:2px solid var(--line);border-radius:22px;
+  .cards{display:flex;flex-direction:column;gap:14px;margin-top:24px}
+  .card{position:relative;height:152px;background:var(--surface);border:2px solid var(--line);border-radius:22px;
         display:grid;grid-template-columns:14px 1fr 220px 210px;align-items:center;overflow:hidden}
   .card.storm{border-color:rgba(224,166,58,.75)} .card.rain{border-color:rgba(76,130,240,.6)}
   .bar{height:100%}
   .who{padding-left:30px}
   .who .nm{font-weight:900;font-size:46px;line-height:1.1}
-  .who .tk{font:500 24px var(--mono);color:var(--muted);letter-spacing:.06em;margin-top:10px}
-  .wx{display:flex;flex-direction:column;align-items:center;gap:4px}
-  .wx svg{width:104px;height:104px}
-  .wx .lb{font-weight:700;font-size:38px}
+  .who .tk{font:500 26px var(--sans);color:var(--muted);margin-top:10px;white-space:nowrap}
+  .who .tk b{font-family:var(--mono)}
+  .wx{display:flex;flex-direction:column;align-items:center;gap:2px}
+  .wx svg{width:86px;height:86px}
+  .wx .lb{font-weight:700;font-size:34px;line-height:1.1}
   .num{text-align:right;padding-right:30px}
-  .num .ret{font:700 52px var(--mono);letter-spacing:-.01em}
-  .num .z{font:500 24px var(--mono);color:var(--muted);margin-top:6px}
+  .num .ret{font:700 50px var(--mono);letter-spacing:-.01em;white-space:nowrap}
+  .num .ret .u{font:700 28px var(--sans);margin-left:4px}
+  .num .tag{font:700 24px var(--sans);color:var(--muted);margin-top:8px}
+  .num .tag.hi{color:var(--amber)}
   .up{color:var(--green)} .dn{color:#E8735A}
 
-  .obs{margin-top:28px;background:var(--surface-2);border-left:6px solid var(--sky);border-radius:0 18px 18px 0;padding:26px 30px}
-  .obs .k{font:700 24px var(--mono);letter-spacing:.2em;color:var(--sky)}
-  .obs .t{font-weight:700;font-size:34px;line-height:1.5;margin-top:10px;text-wrap:pretty}
-  .foot{display:flex;justify-content:space-between;margin-top:22px;font-size:24px;color:var(--muted)}
+  /* 底部信息框：组合观察 ↔ 本周看点（视频里交叉淡入淡出） */
+  .box{position:relative;margin-top:24px;height:196px}
+  .pane{position:absolute;inset:0;background:var(--surface-2);border-left:6px solid var(--sky);border-radius:0 18px 18px 0;padding:22px 30px}
+  .pane .k{font:700 24px var(--sans);letter-spacing:.2em;color:var(--sky)}
+  .pane .t{font-weight:700;font-size:33px;line-height:1.48;margin-top:8px;text-wrap:pretty}
+  #watch{border-left-color:var(--amber)}
+  #watch .k{color:var(--amber)}
+  .wrow{display:flex;align-items:baseline;gap:16px;margin-top:12px;white-space:nowrap}
+  .wrow .d{font:700 30px var(--mono);color:var(--fg);min-width:96px}
+  .wrow .w{font:500 26px var(--sans);color:var(--muted);min-width:56px}
+  .wrow .e{font:700 32px var(--sans)}
+  .wrow .to{font:500 24px var(--sans);color:var(--muted);overflow:hidden;text-overflow:ellipsis}
+  .strip{display:none;margin-top:14px;font:700 26px var(--sans);color:var(--amber);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .static .strip{display:block}
+  .foot{display:flex;justify-content:space-between;margin-top:18px;font-size:24px;color:var(--muted)}
   .foot .wm{font:700 26px var(--mono);letter-spacing:.05em}
+  .src{margin-top:6px;font-size:22px;color:#5F6B7A}
+  .who .tk b{color:var(--fg);font-weight:700}
 </style>
 </head>
 <body>
 <svg class="curve" viewBox="0 0 1080 640" preserveAspectRatio="none"><path d="M0,620 C300,590 560,500 740,330 C880,190 980,90 1080,30" fill="none" stroke="#4C82F0" stroke-width="7"/></svg>
-<div class="stage">
+<div class="stage" id="stage">
   <div class="brand" id="brand">COMPOUNDING BLUE</div>
   <div class="title" id="title">组合晴雨表<small>PORTFOLIO BAROMETER</small></div>
   <div class="meta" id="meta"><span class="issue" id="issue"></span><span class="slogan">风雨有数，底座常青</span></div>
   <div class="cards" id="cards"></div>
-  <div class="obs" id="obs"><div class="k">组合观察</div><div class="t" id="obsText"></div></div>
+  <div class="box" id="box">
+    <div class="pane" id="obs"><div class="k">组合观察</div><div class="t" id="obsText"></div></div>
+    <div class="pane" id="watch"><div class="k">本周看点</div><div id="watchRows"></div></div>
+  </div>
+  <div class="strip" id="strip"></div>
   <div class="foot" id="foot"><span id="disc">教育分享 · 非投资建议</span><span class="wm">@compoundingblue</span></div>
+  <div class="src" id="src">数据：美联储 H.15 · 美国劳工部（经 FRED®）</div>
 </div>
 
 <script>
@@ -87,23 +108,47 @@ const ICON={
   na:`<svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="18" fill="none" stroke="${C.cloudDk}" stroke-width="4" stroke-dasharray="6 6"/></svg>`
 };
 
-/* 浏览器直接打开时的预览数据（示例数据，非真实行情） */
+/* 浏览器直接打开时的预览数据（示例数据，非真实数据） */
 const DEMO={issue:1,week_ending:'2026-10-16',pillars:[
-  {key:'attack',name:'进攻引擎',tickers:['SMH','QQQ'],icon:'storm',label:'雷暴',weekly_return:-5.06,z:-2.08},
-  {key:'core',name:'战略基石',tickers:['QUAL','MOAT'],icon:'partly',label:'多云',weekly_return:0.65,z:0.46},
-  {key:'longevity',name:'长寿主题',tickers:['XLV','GRID'],icon:'sunny',label:'晴',weekly_return:3.76,z:2.16},
-  {key:'income',name:'收益底座',tickers:['SCHD','VYM'],icon:'cloudy',label:'阴',weekly_return:-0.70,z:-0.53}]};
+  {key:'attack',name:'进攻引擎',factor:'实际利率',latest_display:'2.19%',change_value:18,change_decimals:0,change_unit:'bp',as_of:'2026-10-16',icon:'rain',label:'雨',z:1.55,score:-1.55,headwind:true,intensity:'明显',direction:'上行'},
+  {key:'core',name:'战略基石',factor:'初请4周均值',latest_display:'22.4万人',change_value:-0.2,change_decimals:1,change_unit:'万',as_of:'2026-10-10',icon:'partly',label:'多云',z:-0.44,score:0.44,headwind:false,intensity:'常态',direction:'下行'},
+  {key:'longevity',name:'长寿主题',factor:'通胀预期',latest_display:'2.24%',change_value:-8,change_decimals:0,change_unit:'bp',as_of:'2026-10-16',icon:'sunny',label:'晴',z:-1.74,score:1.74,headwind:false,intensity:'明显',direction:'下行'},
+  {key:'income',name:'收益底座',factor:'10年期国债',latest_display:'4.43%',change_value:10,change_decimals:0,change_unit:'bp',as_of:'2026-10-16',icon:'cloudy',label:'阴',z:0.8,score:-0.8,headwind:true,intensity:'常态',direction:'上行'}],
+  watch:[{date:'2026-10-22',weekday:'周四',event:'CPI 通胀数据',short:'CPI',drawers:['长寿主题','收益底座']},
+         {date:'2026-10-22',weekday:'周四',event:'初请失业金周报',short:'初请',drawers:['战略基石']}]};
 
-/* ---------- 时间线（秒）——口播稿按此对齐 ---------- */
-const T={brand:[0,.6],title:[.3,.9],meta:[.9,1.5],card0:1.6,cardGap:1.1,obs:[6.4,7.0],foot:[7.6,8.2],
-         focusWorst:9.0,focusBest:12.5,focusEnd:16.0,ramp:.4,staticAt:8.6};
+/* ---------- 时间线（秒）----------
+   口播 6 段：①钩子 ②进攻引擎 ③战略基石 ④长寿主题 ⑤收益底座 ⑥本周看点+免责
+   window.CUES = 6 段各自的开始时间（render.py 从配音停顿里自动测出）。
+   ①：标题 + 四张卡片依次入场；②~⑤：依次高亮对应那一格；⑥：全部恢复，底部切到「本周看点」。
+   没有配音时用默认节奏（25 秒）。 */
+const CUES=window.CUES||[0,3.0,7.0,11.0,15.0,19.5];
+const DURATION=window.DURATION||25;
+const T=(()=>{
+  const c1=CUES[1];
+  const card0=Math.min(1.0,Math.max(.6,c1-2.2));
+  const gap=Math.max(.25,Math.min(.5,(c1-card0-.6)/4));
+  const obs=card0+4*gap+.4;
+  return {brand:[0,.6],title:[.2,.8],meta:[.6,1.2],card0,cardGap:gap,obs:[obs,obs+.6],foot:[obs+.4,obs+1.0],
+          focus:[CUES[1],CUES[2],CUES[3],CUES[4]],focusEnd:CUES[5],watchAt:CUES[5],ramp:.35};
+})();
 
+const UNIT={bp:'基点','万':'万人'};
+const tagOf=p=>{
+  const z=p.z==null?0:Math.abs(p.z);
+  const it=p.intensity||(z>=2?'罕见':z>=1?'明显':'常态');
+  const dir=p.direction||(p.change_value>0?'上行':p.change_value<0?'下行':'持平');
+  if(dir==='持平') return '基本持平';
+  return (it==='常态'?'小幅':it)+dir;
+};
 const clamp=x=>Math.max(0,Math.min(1,x));
 const seg=(t,a,b)=>clamp((t-a)/(b-a));
 const eOut=k=>1-Math.pow(1-k,3);
 const eBack=k=>{const c=1.70158;return 1+(c+1)*Math.pow(k-1,3)+c*Math.pow(k-1,2);};
-const fmtRet=v=>(v>0?'+':'')+v.toFixed(2)+'%';
+const fmtNum=(v,p)=>{const x=+v.toFixed(p.change_decimals||0);return (x>0?'+':'')+(Object.is(x,-0)?0:x).toFixed(p.change_decimals||0);};
+const mmdd=ds=>ds?ds.slice(5).replace('-','/'):'';
 const ramp=(t,on,off)=>Math.min(seg(t,on,on+T.ramp),1-seg(t,off,off+T.ramp));
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 let R={};   // DOM 引用
 function build(){
@@ -111,56 +156,59 @@ function build(){
   const n=String(d.issue||1).padStart(2,'0');
   const we=(d.week_ending||'').replace(/-/g,'.');
   document.getElementById('issue').innerHTML=`第 <b>${n}</b> 期 · 截至 <b>${we}</b>`;
-  document.getElementById('obsText').textContent=window.OBS||'进攻抽屉遇雷暴，长寿抽屉却放晴——这正是把四个抽屉分开放的意义：风雨只打湿其中一格。';
+  document.getElementById('obsText').textContent=window.OBS||'十年期只涨了10个基点，因为通胀预期回落，替实际利率挡掉了一半。';
   document.getElementById('disc').textContent=window.DISC||(window.BAROMETER?'教育分享 · 非投资建议':'教育分享 · 非投资建议 · 示例数据');
+  const watch=(d.watch||[]).slice(0,2);
+  document.getElementById('watchRows').innerHTML=watch.length
+    ? watch.map(w=>`<div class="wrow"><span class="d">${mmdd(w.date)}</span><span class="w">${esc(w.weekday||'')}</span>`+
+        `<span class="e">${esc(w.event)}</span><span class="to">→ ${esc((w.drawers||[]).join(' · '))}</span></div>`).join('')
+    : `<div class="wrow"><span class="e">本周没有重要数据发布</span></div>`;
+  document.getElementById('strip').textContent=watch.length
+    ? '本周看点：'+watch.map(w=>`${mmdd(w.date)} ${w.short||w.event}`).join(' ｜ ') : '';
   const box=document.getElementById('cards');
   R.cards=d.pillars.map(p=>{
     const el=document.createElement('div');
     el.className=`card ${p.icon}`;
-    const cls=(p.weekly_return||0)>=0?'up':'dn';
+    const cls=p.headwind?'dn':'up';
+    const lag=p.as_of&&p.as_of!==d.week_ending?` · ${mmdd(p.as_of)}`:'';
     el.innerHTML=`<div class="bar" style="background:${PILLAR_COLOR[p.key]}"></div>
-      <div class="who"><div class="nm">${p.name}</div><div class="tk">${p.tickers.join(' · ')}</div></div>
+      <div class="who"><div class="nm">${p.name}</div><div class="tk">${p.factor} · <b>${p.latest_display||'—'}</b>${lag}</div></div>
       <div class="wx">${ICON[p.icon]||ICON.na}<div class="lb">${p.label}</div></div>
-      <div class="num"><div class="ret ${cls}"></div>
-        <div class="z">z ${p.z==null?'—':(p.z>0?'+':'')+p.z.toFixed(2)}</div></div>`;
+      <div class="num"><div class="ret ${cls}"><span class="n"></span><span class="u">${UNIT[p.change_unit]||p.change_unit||''}</span></div>
+        <div class="tag ${tagOf(p).startsWith('罕见')?'hi':''}">${tagOf(p)}</div></div>`;
     box.appendChild(el);
-    return {el,p,svg:el.querySelector('.wx svg'),ret:el.querySelector('.ret'),
+    return {el,p,svg:el.querySelector('.wx svg'),ret:el.querySelector('.ret .n'),
             rays:el.querySelector('.rays'),bolt:el.querySelector('.bolt'),drops:[...el.querySelectorAll('.drop')]};
   });
-  ['brand','title','meta','obs','foot'].forEach(id=>R[id]=document.getElementById(id));
-  const zs=d.pillars.map((p,i)=>({i,z:p.z==null?0:p.z}));
-  R.worst=zs.reduce((a,b)=>b.z<a.z?b:a).i;
-  R.best=zs.reduce((a,b)=>b.z>a.z?b:a).i;
+  ['brand','title','meta','box','obs','watch','foot','src','strip'].forEach(id=>R[id]=document.getElementById(id));
 }
 
 function fade(el,t,[a,b]){const k=eOut(seg(t,a,b));el.style.opacity=k;el.style.transform=`translateY(${(1-k)*24}px)`;}
 
-window.renderAt=function(t,noFocus){
+window.renderAt=function(t,isStatic){
   fade(R.brand,t,T.brand); fade(R.title,t,T.title); fade(R.meta,t,T.meta);
-  fade(R.obs,t,T.obs); fade(R.foot,t,T.foot);
-  const any=noFocus?0:ramp(t,T.focusWorst,T.focusEnd);
+  fade(R.box,t,T.obs); fade(R.foot,t,T.foot); fade(R.src,t,T.foot);
+  // 底部：组合观察 → 本周看点
+  const w=isStatic?0:seg(t,T.watchAt,T.watchAt+.5);
+  R.obs.style.opacity=1-w; R.watch.style.opacity=w;
+  R.watch.style.transform=`translateY(${(1-w)*14}px)`;
+  const any=isStatic?0:ramp(t,T.focus[0],T.focusEnd);
   R.cards.forEach((c,i)=>{
     const ta=T.card0+i*T.cardGap;
-    const ap=eOut(seg(t,ta,ta+.6));
-    let fw=0;
-    if(!noFocus){
-      if(i===R.worst) fw=Math.max(fw,ramp(t,T.focusWorst,T.focusBest));
-      if(i===R.best)  fw=Math.max(fw,ramp(t,T.focusBest,T.focusEnd));
-    }
+    const ap=eOut(seg(t,ta,ta+.5));
+    // 第 i 格在口播第 i+2 段时高亮
+    const fw=isStatic?0:ramp(t,T.focus[i],i<3?T.focus[i+1]:T.focusEnd);
     const dim=1-.62*any*(1-fw);
     c.el.style.opacity=ap*dim;
     c.el.style.transform=`translateX(${(1-ap)*80}px) scale(${1+.03*fw})`;
     const col=PILLAR_COLOR[c.p.key];
     c.el.style.boxShadow=fw>0?`0 0 0 ${4*fw}px ${col}, 0 18px 50px rgba(0,0,0,${.45*fw})`:'none';
     c.el.style.zIndex=fw>0?2:1;
-    // 图标弹出
-    const s=seg(t,ta+.25,ta+.75);
+    const s=seg(t,ta+.2,ta+.65);
     c.svg.style.opacity=Math.min(1,s*3);
     c.svg.style.transform=`scale(${.4+.6*eBack(s)})`;
-    // 数字滚动
-    const v=c.p.weekly_return;
-    c.ret.textContent=v==null?'—':fmtRet(v*eOut(seg(t,ta+.25,ta+1.05)));
-    // 环境动效
+    const v=c.p.change_value;
+    c.ret.textContent=v==null?'—':fmtNum(v*eOut(seg(t,ta+.2,ta+.95)),c.p);
     if(c.rays){c.rays.style.transformOrigin='32px 32px';c.rays.style.transform=`rotate(${t*20}deg)`;}
     if(c.bolt){const ph=(t%2.4)/2.4;c.bolt.style.opacity=(ph>.86&&ph<.88)?.25:(ph>.92&&ph<.94)?.4:1;}
     c.drops.forEach(dr=>{const pr=((t+parseFloat(dr.dataset.d))%1.2)/1.2;
@@ -169,11 +217,11 @@ window.renderAt=function(t,noFocus){
 };
 
 build();
-if(window.STATIC){ renderAt(T.staticAt,true); }
+if(window.STATIC){ document.getElementById('stage').classList.add('static'); renderAt(T.foot[1]+1,true); }
 else if(window.RENDERER){ renderAt(0); }
 else {                                           // 直接打开 = 实时循环预览
   const t0=performance.now();
-  (function loop(now){ renderAt(((now-t0)/1000)%20); requestAnimationFrame(loop); })(t0);
+  (function loop(now){ renderAt(((now-t0)/1000)%DURATION); requestAnimationFrame(loop); })(t0);
 }
 </script>
 </body>
