@@ -43,7 +43,8 @@
   .num{text-align:right;padding-right:30px}
   .num .ret{font:700 50px var(--mono);letter-spacing:-.01em;white-space:nowrap}
   .num .ret .u{font:700 28px var(--sans);margin-left:4px}
-  .num .tag{font:700 24px var(--sans);color:var(--muted);margin-top:8px}
+  .num .tag{font:700 22px var(--sans);color:var(--muted);margin-top:8px;white-space:nowrap}
+  .num .tag .v{color:var(--amber)}
   .num .tag.hi{color:var(--amber)}
   .up{color:var(--green)} .dn{color:#E8735A}
 
@@ -53,6 +54,7 @@
   .pane .k{font:700 24px var(--sans);letter-spacing:.2em;color:var(--sky)}
   .pane .t{font-weight:700;font-size:33px;line-height:1.48;margin-top:8px;text-wrap:pretty}
   #watch{border-left-color:var(--amber)}
+  #sub .t{font-size:36px;line-height:1.45}
   #watch .k{color:var(--amber)}
   .wrow{display:flex;align-items:baseline;gap:16px;margin-top:12px;white-space:nowrap}
   .wrow .d{font:700 30px var(--mono);color:var(--fg);min-width:96px}
@@ -76,6 +78,7 @@
   <div class="cards" id="cards"></div>
   <div class="box" id="box">
     <div class="pane" id="obs"><div class="k">组合观察</div><div class="t" id="obsText"></div></div>
+    <div class="pane" id="sub"><div class="k" id="subK"></div><div class="t" id="subT"></div></div>
     <div class="pane" id="watch"><div class="k">本周看点</div><div id="watchRows"></div></div>
   </div>
   <div class="strip" id="strip"></div>
@@ -126,20 +129,23 @@ const CUES=window.CUES||[0,3.0,7.0,11.0,15.0,19.5];
 const DURATION=window.DURATION||25;
 const T=(()=>{
   const c1=CUES[1];
-  const card0=Math.min(1.0,Math.max(.6,c1-2.2));
+  const card0=Math.min(.6,Math.max(.25,c1-2.4));
   const gap=Math.max(.25,Math.min(.5,(c1-card0-.6)/4));
   const obs=card0+4*gap+.4;
-  return {brand:[0,.6],title:[.2,.8],meta:[.6,1.2],card0,cardGap:gap,obs:[obs,obs+.6],foot:[obs+.4,obs+1.0],
+  return {brand:[-1,0],title:[-1,0],meta:[-1,0],card0,cardGap:gap,obs:[obs,obs+.6],foot:[obs+.4,obs+1.0],
           focus:[CUES[1],CUES[2],CUES[3],CUES[4]],focusEnd:CUES[5],watchAt:CUES[5],ramp:.35};
 })();
 
 const UNIT={bp:'基点','万':'万人'};
+/* 口播字幕：window.SCRIPT = 6 段口播文字。有它时，底部框在 ①~⑤ 段显示当前这句（静音观看也能看懂），⑥ 段切到本周看点 */
+const SCRIPT=Array.isArray(window.SCRIPT)&&window.SCRIPT.length>=5?window.SCRIPT:null;
+const SUB_LABEL=[['本周','#4C82F0'],['进攻引擎','#E0A63A'],['战略基石','#4C82F0'],['长寿主题','#3FB6A8'],['收益底座','#4FB477']];
 const tagOf=p=>{
   const z=p.z==null?0:Math.abs(p.z);
   const it=p.intensity||(z>=2?'罕见':z>=1?'明显':'常态');
   const dir=p.direction||(p.change_value>0?'上行':p.change_value<0?'下行':'持平');
-  if(dir==='持平') return '基本持平';
-  return (it==='常态'?'小幅':it)+dir;
+  const base=dir==='持平'?'基本持平':(it==='常态'?'小幅':it)+dir;
+  return p.volatile?base+'·<span class="v">波动大</span>':base;
 };
 const clamp=x=>Math.max(0,Math.min(1,x));
 const seg=(t,a,b)=>clamp((t-a)/(b-a));
@@ -180,18 +186,27 @@ function build(){
     return {el,p,svg:el.querySelector('.wx svg'),ret:el.querySelector('.ret .n'),
             rays:el.querySelector('.rays'),bolt:el.querySelector('.bolt'),drops:[...el.querySelectorAll('.drop')]};
   });
-  ['brand','title','meta','box','obs','watch','foot','src','strip'].forEach(id=>R[id]=document.getElementById(id));
+  ['brand','title','meta','box','obs','sub','subK','subT','watch','foot','src','strip'].forEach(id=>R[id]=document.getElementById(id));
+  R.subIdx=-1;
 }
 
 function fade(el,t,[a,b]){const k=eOut(seg(t,a,b));el.style.opacity=k;el.style.transform=`translateY(${(1-k)*24}px)`;}
 
 window.renderAt=function(t,isStatic){
   fade(R.brand,t,T.brand); fade(R.title,t,T.title); fade(R.meta,t,T.meta);
-  fade(R.box,t,T.obs); fade(R.foot,t,T.foot); fade(R.src,t,T.foot);
-  // 底部：组合观察 → 本周看点
+  fade(R.box,t,SCRIPT&&!isStatic?[-1,0]:T.obs); fade(R.foot,t,T.foot); fade(R.src,t,T.foot);
+  // 底部框：有口播字幕时 ①~⑤ 段显示当前这句，否则显示组合观察；⑥ 段切到本周看点
   const w=isStatic?0:seg(t,T.watchAt,T.watchAt+.5);
-  R.obs.style.opacity=1-w; R.watch.style.opacity=w;
+  R.watch.style.opacity=w;
   R.watch.style.transform=`translateY(${(1-w)*14}px)`;
+  if(SCRIPT&&!isStatic){
+    let k=0; for(let i=0;i<5;i++) if(t>=CUES[i]) k=i;
+    if(k!==R.subIdx){ R.subIdx=k; R.subT.textContent=SCRIPT[k]||''; R.subK.textContent=SUB_LABEL[k][0];
+                      R.subK.style.color=SUB_LABEL[k][1]; R.sub.style.borderLeftColor=SUB_LABEL[k][1]; }
+    const nxt=CUES[k+1]??DURATION;
+    const a=Math.min(k===0?1:seg(t,CUES[k],CUES[k]+.25), k<4?1-seg(t,nxt-.15,nxt):1);
+    R.sub.style.opacity=(1-w)*a; R.obs.style.opacity=0;
+  } else { R.sub.style.opacity=0; R.obs.style.opacity=1-w; }
   const any=isStatic?0:ramp(t,T.focus[0],T.focusEnd);
   R.cards.forEach((c,i)=>{
     const ta=T.card0+i*T.cardGap;

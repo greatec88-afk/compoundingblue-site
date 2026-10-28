@@ -1,4 +1,4 @@
-# 组合晴雨表 · Portfolio Barometer — 周更 Reel 工具包 v4（气候因子版 · 配音驱动 · 本周看点）
+# 组合晴雨表 · Portfolio Barometer — 周更 Reel 工具包 v5（气候因子版 · 配音驱动 · 本周看点 · 同步字幕）
 
 > 风雨有数，底座常青。每周给四个抽屉各看一个「气候因子」，按它本周的变化打天气，自动生成竖版看板 + 20 秒动效视频 + 口播文案。
 > **零付费数据源**：只用美国政府公共领域数据（美联储 H.15、美国劳工部），经免费的 FRED® API 获取。不涉及任何股票或基金价格，不荐股。
@@ -20,7 +20,8 @@
 z = (本周变化 − 过去 52 周「周变化」均值) / 周变化标准差     （利率用 bp，初请用人数）
 顺风分 s = −z（四个因子都是上升 = 逆风）
 晴 s > 1   多云 0 < s ≤ 1   阴 −1 < s ≤ 0   雨 −2 < s ≤ −1
-雷暴 s ≤ −2，或本周日变化波动 > 2× 常态（仅日度利率）
+雷暴 s ≤ −2，或「逆风 + 本周日变化波动 > 2× 常态」（仅日度利率）
+顺风但波动 > 2× 常态：天气照常按 s 判定，卡片标「波动大」（避免出现「利率下行、绿色数字、却是雷暴」的矛盾）
 ```
 
 - 日度利率按「周五所在周」取每周最后一个观测，节假日自动跳过。
@@ -77,7 +78,10 @@ Authorization: Bearer <GitHub token，放 n8n 凭据>      ← fine-grained toke
 Accept: application/vnd.github+json
 
 { "event_type": "barometer",
-  "client_payload": { "barometer": {{ JSON.stringify($json.barometer) }}, "observation": {{ JSON.stringify($json.observation) }} } }
+  "client_payload": { "barometer": {{ JSON.stringify($json.barometer) }},
+                      "observation": {{ JSON.stringify($json.observation) }},
+                      "voiceover": {{ JSON.stringify($json.voiceover) }},          ← 同步字幕
+                      "audio_url": "<配音文件下载地址，可选>" } }
 ```
 
 ## 数据授权与署名（必须做）
@@ -114,6 +118,14 @@ python3 render.py --data sample-output.json \
 - 自动检测不准时可手动指定：`--cues 0,3,7,11,15,19.5`。
 - GitHub Actions：在 Dispatch 的 `client_payload` 里加 `"audio_url": "<配音文件下载地址>"`，出带声音、已对齐的成片；不传则出 25 秒无声版（默认节奏 0 / 3 / 7 / 11 / 15 / 19.5 秒），可在剪映里按这个节奏配音。
 - 静态 PNG（封面 / 单图）显示组合观察，并在下方加一行「本周看点」。
+
+## 字幕与音频
+
+- **同步字幕**：`client_payload` 带上 `voiceover` 后，底部框在 ①~⑤ 段逐句显示口播（标签随抽屉变色），⑥ 段切到本周看点——静音刷 Reels 的观众也能看懂。没有 `voiceover` 时底部框显示组合观察。
+- **段间停顿 0.5–0.8 秒**：停顿过长（比如 1.5 秒）会让 6 段累计出现 7 秒以上的空白，成片拖沓。
+- **响度**：渲染时自动对人声轻压缩并标准化到约 −14 LUFS（社媒常用目标），不用再手动调音量。
+- **背景音乐（可选）**：仓库 `tools/barometer/` 下放一首 `bgm.mp3`（自己有授权的音乐），Actions 会自动垫在人声下方约 −20 dB，结尾淡出。
+- **开场**：标题和期号第 0 帧就完整显示，第一帧即可作封面，不再从黑屏淡入。
 
 ## 红线
 

@@ -11,7 +11,8 @@
  *   z = (本周变化 − 过去 52 周周变化均值) / 周变化标准差
  *   顺风分 s = 「上升=逆风」时取 −z
  *   s > 1 晴 ｜ 0 < s ≤ 1 多云 ｜ −1 < s ≤ 0 阴 ｜ −2 < s ≤ −1 雨
- *   s ≤ −2，或本周日变化波动 > 2× 常态（仅日度因子）→ 雷暴
+ *   s ≤ −2，或「逆风 + 本周日变化波动 > 2× 常态」（仅日度因子）→ 雷暴
+ *   顺风但波动 > 2× 常态：天气按 s 判定，另标 volatile=true（卡片显示「波动大」）
  *
  * 输入（由 assemble.js 生成）：
  * { week_ending:'2026-10-16', issue:1, lookback_weeks:52,
@@ -47,7 +48,7 @@ function fridayOf(ds) {
 
 function classify(s, volRatio) {
   if (s === null) return 'na';
-  if (s <= -2.0 || volRatio > 2.0) return 'storm';
+  if (s <= -2.0 || (volRatio > 2.0 && s < 0)) return 'storm';   // 雷暴只给逆风；顺风的大波动另行标注
   if (s > 1.0) return 'sunny';
   if (s > 0) return 'partly';
   if (s > -1.0) return 'cloudy';
@@ -114,6 +115,7 @@ function computePillar(key, p, weekEnding, lookback) {
     intensity: Math.abs(z) >= 2 ? '罕见' : Math.abs(z) >= 1 ? '明显' : '常态',
     direction: Math.abs(cur) < (p.kind === 'claims' ? 500 : 0.005) ? '持平' : cur > 0 ? '上行' : '下行',
     vol_ratio: +volRatio.toFixed(2),
+    volatile: volRatio > 2.0,
   };
 }
 
@@ -165,7 +167,7 @@ function computeBarometer(input) {
     story,
     watch: input.calendar || [],     // 本周看点（已按重要性挑出最多 2 项）
     source: '美联储 H.15 · 美国劳工部（经 FRED®）',
-    rule: '本周变化的 z 值，上升=逆风；晴>1｜多云0~1｜阴−1~0｜雨−2~−1｜雷暴≤−2 或日波动>2×常态',
+    rule: '本周变化的 z 值，上升=逆风；晴>1｜多云0~1｜阴−1~0｜雨−2~−1｜雷暴≤−2 或（逆风且日波动>2×常态）',
   };
 }
 
