@@ -24,7 +24,8 @@
       "headwind": true,
       "intensity": "明显",
       "direction": "上行",
-      "vol_ratio": 0.22
+      "vol_ratio": 0.22,
+      "volatile": false
     },
     {
       "key": "core",
@@ -47,7 +48,8 @@
       "headwind": false,
       "intensity": "常态",
       "direction": "下行",
-      "vol_ratio": 0
+      "vol_ratio": 0,
+      "volatile": false
     },
     {
       "key": "longevity",
@@ -70,7 +72,8 @@
       "headwind": false,
       "intensity": "明显",
       "direction": "下行",
-      "vol_ratio": 0.47
+      "vol_ratio": 0.47,
+      "volatile": false
     },
     {
       "key": "income",
@@ -93,7 +96,8 @@
       "headwind": true,
       "intensity": "常态",
       "direction": "上行",
-      "vol_ratio": 0.12
+      "vol_ratio": 0.12,
+      "volatile": false
     }
   ],
   "summary": "1雨 · 1多云 · 1晴 · 1阴",
@@ -147,6 +151,7 @@
     {
       "date": "2026-10-22",
       "weekday": "周四",
+      "bj_time": "北京时间周四晚间",
       "event": "CPI 通胀数据",
       "short": "CPI",
       "drawers": [
@@ -158,6 +163,7 @@
     {
       "date": "2026-10-22",
       "weekday": "周四",
+      "bj_time": "北京时间周四晚间",
       "event": "初请失业金周报",
       "short": "初请",
       "drawers": [
@@ -167,5 +173,5 @@
     }
   ],
   "source": "美联储 H.15 · 美国劳工部（经 FRED®）",
-  "rule": "本周变化的 z 值，上升=逆风；晴>1｜多云0~1｜阴−1~0｜雨−2~−1｜雷暴≤−2 或日波动>2×常态"
+  "rule": "本周变化的 z 值，上升=逆风；晴>1｜多云0~1｜阴−1~0｜雨−2~−1｜雷暴≤−2 或（逆风且日波动>2×常态）"
 }

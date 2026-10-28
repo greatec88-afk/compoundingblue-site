@@ -67,7 +67,7 @@ const m2 = thr(() => assemble({ fred: { ...fred, IC4WSA: { error_message: 'Bad R
 t('API key 错误 → 报错', m2 && m2.includes('FRED 错误')); console.log('  api  →', m2);
 
 // ---- 阈值 ----
-[[1.01,1,'sunny'],[1.0,1,'partly'],[0.01,1,'partly'],[0,1,'cloudy'],[-0.99,1,'cloudy'],[-1.0,1,'rain'],[-1.99,1,'rain'],[-2.0,1,'storm'],[0.5,2.1,'storm'],[null,1,'na']]
+[[1.01,1,'sunny'],[1.0,1,'partly'],[0.01,1,'partly'],[0,1,'cloudy'],[-0.99,1,'cloudy'],[-1.0,1,'rain'],[-1.99,1,'rain'],[-2.0,1,'storm'],[0.5,2.1,'partly'],[1.5,2.1,'sunny'],[-0.5,2.1,'storm'],[null,1,'na']]
   .forEach(([s, v, e]) => t(`classify(${s},${v})`, classify(s, v) === e));
 
 console.log(bad ? `${bad} FAILED, ${ok} passed` : `all ${ok} checks passed`);

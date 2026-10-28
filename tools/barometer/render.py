@@ -10,10 +10,13 @@
 用法：
   python3 render.py --data sample-output.json --obs "组合观察一句话" --out out
   python3 render.py --data sample-output.json --obs "..." --audio voice.wav --out out
-  可选：--cues 0,3,7,11,15,19.5（手动指定 6 段起点，覆盖自动检测）
+  可选：--script vo.json   口播文字（6 段字符串数组，或含 voiceover 字段的 Guard 输出）→ 底部显示同步字幕
+        --music bgm.mp3    背景音乐（自动压到人声下方，结尾淡出）
+        --cues 0,3,7,11,15,19.5（手动指定 6 段起点，覆盖自动检测）
         --seconds 25（无配音时的时长） --disc "教育分享 · 非投资建议"  --no-video
 
 配音要求：一条完整音频，6 段（①钩子 ②进攻 ③基石 ④长寿 ⑤收益 ⑥看点+免责）之间各停顿约 0.5–0.8 秒。
+音频会自动做响度标准化到 −14 LUFS（Instagram / YouTube 的常用目标），不用在剪辑软件里再调音量。
 
 依赖：pip install playwright（并有 Chromium）；ffmpeg。
 """
@@ -49,7 +52,35 @@ def detect_cues(path, total):
     return [round(c * k, 2) for c in DEFAULT_CUES], "scaled"
 
 
-def init_script(data, obs, disc, static, cues=None, duration=None):
+LOUDNORM = "loudnorm=I=-14:TP=-1.5:LRA=11"
+
+
+def normalize_audio(path, out_wav):
+    """人声轻压缩 + 两遍 loudnorm → 约 −14 LUFS。
+    TTS 人声峰值和平均响度差得大，直接线性提升会被峰值限制卡住，所以先轻压缩。"""
+    pre = out_wav + ".pre.wav"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", path, "-af",
+                    "acompressor=threshold=-24dB:ratio=4:attack=3:release=100:makeup=6dB", pre], check=True)
+    path = pre
+    log = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", path, "-af", LOUDNORM + ":print_format=json",
+                          "-f", "null", "-"], capture_output=True, text=True).stderr
+    m = json.loads(log[log.rindex("{"):log.rindex("}") + 1])
+    af = (f"{LOUDNORM}:measured_I={m['input_i']}:measured_TP={m['input_tp']}:measured_LRA={m['input_lra']}"
+          f":measured_thresh={m['input_thresh']}:offset={m['target_offset']}:linear=true")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", path, "-af", af, "-ar", "48000", out_wav], check=True)
+    return out_wav
+MUSIC_GAIN = 0.10          # 背景音乐相对音量（约 −20 dB）
+
+
+def load_script(path):
+    j = json.load(open(path, encoding="utf-8"))
+    if isinstance(j, dict):
+        j = j.get("voiceover", [])
+    lines = [x.get("text", "") if isinstance(x, dict) else str(x) for x in j]
+    return lines if len(lines) >= 5 else None
+
+
+def init_script(data, obs, disc, static, cues=None, duration=None, script=None):
     js = (f"window.BAROMETER={json.dumps(data, ensure_ascii=False)};"
           f"window.OBS={json.dumps(obs, ensure_ascii=False)};"
           f"window.DISC={json.dumps(disc, ensure_ascii=False)};"
@@ -57,6 +88,8 @@ def init_script(data, obs, disc, static, cues=None, duration=None):
           f"window.RENDERER=true;")
     if cues:
         js += f"window.CUES={json.dumps(cues)};window.DURATION={duration};"
+    if script and not static:
+        js += f"window.SCRIPT={json.dumps(script, ensure_ascii=False)};"
     return js
 
 
@@ -76,10 +109,10 @@ def render_png(pw, data, obs, disc, out_png):
     b.close()
 
 
-def render_mp4(pw, data, obs, disc, out_mp4, seconds, cues=None, audio=None, fps=30):
+def render_mp4(pw, data, obs, disc, out_mp4, seconds, cues=None, audio=None, script=None, music=None, fps=30):
     """逐帧确定性渲染：每帧调用 renderAt(t) 后截图，帧时间与机器快慢无关。"""
     tmp = tempfile.mkdtemp()
-    b, pg = open_page(pw, init_script(data, obs, disc, False, cues, seconds))
+    b, pg = open_page(pw, init_script(data, obs, disc, False, cues, seconds, script))
     n = int(round(seconds * fps))
     for i in range(n):
         pg.evaluate(f"renderAt({i / fps:.5f})")
@@ -87,6 +120,14 @@ def render_mp4(pw, data, obs, disc, out_mp4, seconds, cues=None, audio=None, fps
     b.close()
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(fps), "-i", os.path.join(tmp, "f%05d.jpg")]
     if audio:
+        audio = normalize_audio(audio, os.path.join(tmp, "voice-norm.wav"))
+    if audio and music:
+        cmd += ["-i", audio, "-stream_loop", "-1", "-i", music, "-filter_complex",
+                f"[1:a]apad=whole_dur={seconds}[v];"
+                f"[2:a]atrim=0:{seconds},volume={MUSIC_GAIN},afade=t=out:st={max(0, seconds - 1.5)}:d=1.5[m];"
+                f"[v][m]amix=inputs=2:duration=first:normalize=0[a]",
+                "-map", "0:v", "-map", "[a]", "-c:a", "aac", "-b:a", "160k", "-ar", "48000"]
+    elif audio:
         cmd += ["-i", audio, "-map", "0:v", "-map", "1:a", "-c:a", "aac", "-b:a", "160k", "-ar", "48000"]
     cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-movflags", "+faststart", out_mp4]
     subprocess.run(cmd, check=True)
@@ -102,6 +143,8 @@ def main():
     ap.add_argument("--audio", help="完整配音（wav/mp3/m4a），6 段之间留停顿")
     ap.add_argument("--cues", help="手动指定 6 段起点，如 0,3,7,11,15,19.5")
     ap.add_argument("--disc", default="教育分享 · 非投资建议")
+    ap.add_argument("--script", help="口播文字 JSON（6 段），用于同步字幕")
+    ap.add_argument("--music", help="背景音乐文件（可选，需配合 --audio）")
     ap.add_argument("--no-video", action="store_true")
     a = ap.parse_args()
     data = json.load(open(a.data, encoding="utf-8"))
@@ -125,7 +168,9 @@ def main():
     with sync_playwright() as pw:
         render_png(pw, data, a.obs, a.disc, os.path.join(a.out, stem + ".png"))
         if not a.no_video:
-            render_mp4(pw, data, a.obs, a.disc, os.path.join(a.out, stem + ".mp4"), seconds, cues, a.audio)
+            script = load_script(a.script) if a.script else None
+            render_mp4(pw, data, a.obs, a.disc, os.path.join(a.out, stem + ".mp4"), seconds, cues, a.audio,
+                       script, a.music if a.audio else None)
     print("done →", a.out)
 
 

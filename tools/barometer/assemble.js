@@ -36,6 +36,11 @@ const EVENTS = [
   { match: /^Gross Domestic Product\b/i,     name: 'GDP 数据',     short: 'GDP',  drawers: ['战略基石'],             pri: 2 },
 ];
 const WEEKDAY = '日一二三四五六';
+// 观众在中国：给出北京时间。议息结果美东下午 2 点 = 北京时间次日凌晨；数据发布美东 8:30 = 北京时间当天晚间
+function bjTime(date, short) {
+  if (short === '议息') return '北京时间周' + WEEKDAY[new Date(addDays(date, 1) + 'T00:00:00Z').getUTCDay()] + '凌晨';
+  return '北京时间周' + WEEKDAY[new Date(date + 'T00:00:00Z').getUTCDay()] + '晚间';
+}
 
 function buildCalendar(fredCal, now) {
   const start = iso(now), end = addDays(start, 6);
@@ -44,7 +49,7 @@ function buildCalendar(fredCal, now) {
     const k = e.short + date;
     if (date < start || date > end || seen.has(k)) return;
     seen.add(k);
-    out.push({ date, weekday: '周' + WEEKDAY[new Date(date + 'T00:00:00Z').getUTCDay()],
+    out.push({ date, weekday: '周' + WEEKDAY[new Date(date + 'T00:00:00Z').getUTCDay()], bj_time: bjTime(date, e.short),
                event: e.name, short: e.short, drawers: e.drawers, pri: e.pri });
   };
   ((fredCal && fredCal.release_dates) || []).forEach(r => {
@@ -57,7 +62,7 @@ function buildCalendar(fredCal, now) {
     for (let i = 0; i < 7; i++) {
       const d = addDays(start, i);
       if (new Date(d + 'T00:00:00Z').getUTCDay() === 4) {
-        top.push({ date: d, weekday: '周四', event: '初请失业金周报', short: '初请', drawers: ['战略基石'], pri: 3 });
+        top.push({ date: d, weekday: '周四', bj_time: bjTime(d, '初请'), event: '初请失业金周报', short: '初请', drawers: ['战略基石'], pri: 3 });
         break;
       }
     }

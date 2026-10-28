@@ -40,6 +40,11 @@ function guard(barometer, resp) {
   if (!VO[5] || !VO[5].includes(DISCLAIMER)) errs.push('第 ⑥ 段要以「非投资建议」收尾');
   if (!(out.caption || '').includes(DISCLAIMER)) errs.push('caption 缺少免责声明');
 
+  // 天气词只用在抽屉上，不用在因子上（「实际利率放晴」说不通）
+  if (/(利率|预期|人数|国债|初请)[^，。：；]{0,4}(放晴|转晴|多云|转阴|下雨|雷暴)/.test(vo)) errs.push('天气词要用在抽屉上，不要用在因子上（如「实际利率放晴」）');
+  if (vo.includes('常态')) errs.push('口播不要出现「常态」：常态幅度就不提强度');
+  if (/\d+(\.\d+)?万人/.test(vo) && /0\.\d万人/.test(vo)) errs.push('不足 1 万人请说成「1000人」这类整数，别说「0.1万人」');
+
   // 四个抽屉每段都要讲到：名字 + 本周天气
   const SHORT = { attack: '进攻', core: '基石', longevity: '长寿', income: '收益' };
   ['attack', 'core', 'longevity', 'income'].forEach((k, i) => {
@@ -59,7 +64,7 @@ function guard(barometer, resp) {
     if (look.includes(kw) && !W.some(w => w.short === sh)) errs.push(`提到「${kw}」，但本周看点里没有这项`);
   });
   ((VO[5] || '').match(/周[一二三四五六日]/g) || []).forEach(d => {
-    if (!W.some(w => w.weekday === d)) errs.push(`「${d}」与本周看点的日期不符`);
+    if (!W.some(w => w.weekday === d || (w.bj_time || '').includes(d))) errs.push(`「${d}」与本周看点的日期不符`);
   });
 
   const all = [out.observation, vo, out.caption].join('\n');
